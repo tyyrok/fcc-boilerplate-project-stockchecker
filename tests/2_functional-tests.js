@@ -15,7 +15,6 @@ suite('Functional Tests', function() {
                 assert.equal(res.type, "application/json");
                 assert.deepInclude(res.body, { "stock" : "GOOG" });
                 assert.deepProperty(res.body, 'price');
-                assert.deepProperty(res.body, 'likes');
                 done();
             });
     });

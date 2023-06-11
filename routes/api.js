@@ -19,19 +19,16 @@ let stockSchema = new mongoose.Schema({
 
 let StockInstance = new mongoose.model('StockInstance', stockSchema);
 
-
-
 module.exports = function (app) {
 
   app.route('/api/stock-prices/')
     .get(function (req, res){
 
       makeRequest(req, res);
-    
     })
-    
 };
-//Function to make request incl multiple
+
+//Function to make ASYNC requests incl multiple through API
 let makeRequest = function(req, res) {
 
   console.log(req.query);
@@ -69,7 +66,7 @@ let makeRequest = function(req, res) {
 
 };
 
-// Make likes read and write!!!!!!!!!!!!!!!!!!!!!!
+// Check whether like from current IP in DB, create requests to DB
 function readLikes(object, req) {
   return new Promise(function(resolve, reject) {
     
@@ -119,7 +116,7 @@ function readLikes(object, req) {
   });
 }
 
-//Write new record
+//Write new record in DB
 function createNewRecord(objToCreate, ip='') {
   let newRecord = new StockInstance({ stock: objToCreate.stock,
                                       ip: bcrypt.hashSync(ip, saltRounds),
@@ -130,7 +127,7 @@ function createNewRecord(objToCreate, ip='') {
            .catch( (err) => console.log(err));
 }
 
-//Update current record
+//Update current record in DB
 function updateRecordLikes(objToUpdate, ip) {
 
   StockInstance.findOne( objToUpdate)
@@ -178,15 +175,15 @@ function callApi(reqUrl) {
   });
 }
 
-//Function to show results
+//Function to send results
 let sendResponse = function(object, req, res){
   //console.log("Send Response" + Object.entries(object));
   console.log(object);
   if ( !Array.isArray(object) ) {
   
     res.json({ "stockData" : {"stock": object.stock, 
-                              "price" : object.price,
-                              "likes" : object.likes, } });
+                              "price" : +object.price,
+                              "likes" : +object.likes, } });
   } else {
 
     let resultObjArr = [];
@@ -196,8 +193,8 @@ let sendResponse = function(object, req, res){
     for (let i = 0 ; i < 2; i++ ) {
 
       resultObjArr.push({ 'stock' : object[i].stock, 
-                          'price' : object[i].price,
-                          'rel_likes' : relLike[i] });
+                          'price' : +object[i].price,
+                          'rel_likes' : +relLike[i] });
     }
     res.json({ "stockData" : resultObjArr });
   }

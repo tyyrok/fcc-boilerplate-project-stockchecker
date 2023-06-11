@@ -3,6 +3,8 @@
 const mongoose = require('mongoose');
 const https = require('node:https');
 const { resolve } = require('node:path');
+const bcrypt = require('bcrypt');
+const saltRounds = 8;
 
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
@@ -93,7 +95,8 @@ function readLikes(object, req) {
                                 likes: 0,
                               });
 
-                            } else if ( !data.ip.includes(req.ip) && (req.query.like == 'true') ) {
+                            } else if ( !data.ip.some(elem => bcrypt.compareSync(req.ip, elem)) && (req.query.like == 'true') ) {
+                            //} else if ( !data.ip.includes(req.ip) && (req.query.like == 'true') ) {
 
                               updateRecordLikes(objToFind, req.ip);
                               resolve({ stock: Object.keys(object)[0],
@@ -119,7 +122,7 @@ function readLikes(object, req) {
 //Write new record
 function createNewRecord(objToCreate, ip='') {
   let newRecord = new StockInstance({ stock: objToCreate.stock,
-                                      ip: ip,
+                                      ip: bcrypt.hashSync(ip, saltRounds),
                                       likes : 0,
                                     });
   newRecord.save()
@@ -133,7 +136,7 @@ function updateRecordLikes(objToUpdate, ip) {
   StockInstance.findOne( objToUpdate)
                .then( (recordToUpdate) => {
                   recordToUpdate.likes = +recordToUpdate.likes + 1;
-                  recordToUpdate.ip.push(ip);
+                  recordToUpdate.ip.push(bcrypt.hashSync(ip, saltRounds) );
                   recordToUpdate.save()
                                 .then( (value) => console.log("Object updated!"))
                                 .catch( (err) => console.log(err));

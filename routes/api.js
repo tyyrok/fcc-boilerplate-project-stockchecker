@@ -8,7 +8,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 
 let stockSchema = new mongoose.Schema({
   stock: String,
-  ip: String,
+  ip: [],
   likes: {
     type: Number,
     default: 0
@@ -44,17 +44,102 @@ let makeRequest = function(req, res) {
     }
 
     Promise.all(promiseArray)
-           .then((value) => sendResponse(value, req, res))
+           .then( (value) => {
+              let arr = value.map(r => readLikes(r, req));
+
+              return Promise.all(arr);
+           })
+           .then((value) => {
+              sendResponse(value, req, res)
+           })
+
 
   } else {
 
     let reqUrl = 'https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/'+ req.query.stock +'/quote';
     let promise = callApi(reqUrl);
 
-    promise.then((value) => sendResponse(value, req, res));
+    promise.then(value => readLikes(value, req))
+           .then((value) => {
+                sendResponse(value, req, res);
+           });
   }
 
 };
+
+// Make likes read and write!!!!!!!!!!!!!!!!!!!!!!
+function readLikes(object, req) {
+  return new Promise(function(resolve, reject) {
+    
+    let objToFind = { stock: Object.keys(object)[0] }
+
+    StockInstance.findOne(objToFind)
+                 .then( (data) => {
+                            //console.log(data);
+
+                            if (!data && req.query.likes == true) {
+                
+                              createNewRecord(objToFind, req.ip);
+                              resolve({ stock: Object.keys(object)[0],
+                                price: Object.values(object)[0],
+                                likes: 1,
+                              });
+
+                            } else if (!data) {
+                              
+                              createNewRecord(objToFind, '');
+                              resolve({ stock: Object.keys(object)[0],
+                                price: Object.values(object)[0],
+                                likes: 0,
+                              });
+
+                            } else if ( !data.ip.includes(req.ip) && (req.query.like == 'true') ) {
+
+                              updateRecordLikes(objToFind, req.ip);
+                              resolve({ stock: Object.keys(object)[0],
+                                price: Object.values(object)[0],
+                                likes: +data.likes + 1,
+                              });
+                            } else {
+                              resolve({ stock: Object.keys(object)[0],
+                                        price: Object.values(object)[0],
+                                        likes: data.likes,
+                                      }) 
+                            }
+
+                })
+                .catch( (err) => {
+                      console.log(err);
+                      reject(err);
+                });
+
+  });
+}
+
+//Write new record
+function createNewRecord(objToCreate, ip='') {
+  let newRecord = new StockInstance({ stock: objToCreate.stock,
+                                      ip: ip,
+                                      likes : 0,
+                                    });
+  newRecord.save()
+           .then( (value) => console.log("New recored created!"))
+           .catch( (err) => console.log(err));
+}
+
+//Update current record
+function updateRecordLikes(objToUpdate, ip) {
+
+  StockInstance.findOne( objToUpdate)
+               .then( (recordToUpdate) => {
+                  recordToUpdate.likes = +recordToUpdate.likes + 1;
+                  recordToUpdate.ip.push(ip);
+                  recordToUpdate.save()
+                                .then( (value) => console.log("Object updated!"))
+                                .catch( (err) => console.log(err));
+               })
+               .catch( (err) => console.log(err));
+}
 
 //Make request through API
 function callApi(reqUrl) {
@@ -92,24 +177,24 @@ function callApi(reqUrl) {
 
 //Function to show results
 let sendResponse = function(object, req, res){
+  //console.log("Send Response" + Object.entries(object));
   console.log(object);
-  console.log("Send Response" + Object.entries(object));
-
-
   if ( !Array.isArray(object) ) {
   
-    res.json({ "stockData" : {"stock": Object.keys(object)[0], 
-                              "price" : Object.values(object)[0],
-                              "likes" : 0, } });
+    res.json({ "stockData" : {"stock": object.stock, 
+                              "price" : object.price,
+                              "likes" : object.likes, } });
   } else {
 
     let resultObjArr = [];
+    let relLike = []; 
+    relLike.push(+object[0].likes - +object[1].likes);
+    relLike.push(+object[1].likes - +object[0].likes);
+    for (let i = 0 ; i < 2; i++ ) {
 
-    for (let i = 0 ; i < object.length; i++ ) {
-
-      resultObjArr.push({ 'stock' : Object.keys(object[i])[0], 
-                          'price' : Object.values(object[i])[0],
-                          'likes' : 0 });
+      resultObjArr.push({ 'stock' : object[i].stock, 
+                          'price' : object[i].price,
+                          'rel_likes' : relLike[i] });
     }
     res.json({ "stockData" : resultObjArr });
   }
